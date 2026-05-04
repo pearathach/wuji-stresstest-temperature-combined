@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temperature Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            margin-bottom: 10px;
+        }
+        
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.connected {
+            background: #00ff88;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .sensor-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .sensor-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        .sensor-card.sensor-1 {
+            border-top: 3px solid #00d4ff;
+        }
+        
+        .sensor-card.sensor-2 {
+            border-top: 3px solid #ff6b6b;
+        }
+        
+        .sensor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .sensor-name {
+            font-size: 1.1rem;
+            color: rgba(255,255,255,0.7);
+            font-weight: 500;
+        }
+        
+        .sensor-icon {
+            font-size: 1.5rem;
+        }
+        
+        .temp-display {
+            margin-bottom: 20px;
+        }
+        
+        .temp-main {
+            font-size: 3.5rem;
+            font-weight: 200;
+            line-height: 1;
+        }
+        
+        .temp-main .unit {
+            font-size: 1.5rem;
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .temp-main span:first-child {
+            display: inline-block;
+            transition: transform 0.15s ease-out;
+        }
+        
+        .temp-main span:first-child.updated {
+            transform: scale(1.02);
+        }
+        
+        .temp-secondary {
+            font-size: 1.2rem;
+            color: rgba(255,255,255,0.5);
+            margin-top: 8px;
+            transition: opacity 0.15s;
+        }
+        
+        .cold-junction {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            margin-top: 16px;
+        }
+        
+        .cold-junction-label {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .cold-junction-value {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        
+        .chart-container {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .chart-title {
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+        
+        .chart-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chart-controls button {
+            padding: 8px 16px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+        
+        .chart-controls button:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .chart-controls button.active {
+            background: rgba(0,212,255,0.2);
+            border-color: #00d4ff;
+        }
+        
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+        }
+        
+        .no-data {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .no-data-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+        
+        .error-message {
+            background: rgba(255,68,68,0.2);
+            border: 1px solid rgba(255,68,68,0.3);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.4);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-top: 4px;
+            transition: color 0.2s;
+        }
+        
+        .timestamp {
+            text-align: center;
+            margin-top: 20px;
+            color: rgba(255,255,255,0.4);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🌡️ Temperature Monitor</h1>
+            <div class="status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <div class="cards-container">
+            <div class="sensor-card sensor-1">
+                <div class="sensor-header">
+                    <span class="sensor-name">Sensor 1 (Thermocouple)</span>
+                    <span class="sensor-icon">🔥</span>
+                </div>
+                <div class="temp-display">
+                    <div class="temp-main">
+                        <span id="sensor1-temp">--</span>
+                        <span class="unit">°C</span>
+                    </div>
+                    <div class="temp-secondary" id="sensor1-temp-f">-- °F</div>
+                </div>
+                <div class="cold-junction">
+                    <span class="cold-junction-label">Cold Junction:</span>
+                    <span class="cold-junction-value" id="sensor1-cj">-- °C</span>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <div class="stat-label">Min</div>
+                        <div class="stat-value" id="sensor1-min">--</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Max</div>
+                        <div class="stat-value" id="sensor1-max">--</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Avg</div>
+                        <div class="stat-value" id="sensor1-avg">--</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sensor-card sensor-2">
+                <div class="sensor-header">
+                    <span class="sensor-name">Sensor 2 (Thermocouple)</span>
+                    <span class="sensor-icon">🔥</span>
+                </div>
+                <div class="temp-display">
+                    <div class="temp-main">
+                        <span id="sensor2-temp">--</span>
+                        <span class="unit">°C</span>
+                    </div>
+                    <div class="temp-secondary" id="sensor2-temp-f">-- °F</div>
+                </div>
+                <div class="cold-junction">
+                    <span class="cold-junction-label">Cold Junction:</span>
+                    <span class="cold-junction-value" id="sensor2-cj">-- °C</span>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <div class="stat-label">Min</div>
+                        <div class="stat-value" id="sensor2-min">--</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Max</div>
+                        <div class="stat-value" id="sensor2-max">--</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Avg</div>
+                        <div class="stat-value" id="sensor2-avg">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <div class="chart-header">
+                <span class="chart-title">📈 Temperature History</span>
+                <div class="chart-controls">
+                    <button id="btn-30s" class="active" onclick="setTimeRange(30)">30s</button>
+                    <button id="btn-1m" onclick="setTimeRange(60)">1m</button>
+                    <button id="btn-5m" onclick="setTimeRange(300)">5m</button>
+                    <button id="btn-clear" onclick="clearData()">Clear</button>
+                </div>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="tempChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="timestamp">
+            Last update: <span id="lastUpdate">--</span>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const WS_URL = 'ws://localhost:8765';
+        const MAX_DATA_POINTS = 600; // 10 minutes at 1 sample/sec
+        const CHART_UPDATE_INTERVAL = 50; // ms between chart updates (20 fps)
+        
+        // Data storage
+        let sensor1Data = [];
+        let sensor2Data = [];
+        let timeRange = 30; // seconds
+        
+        // Pending updates buffer (for smooth rendering)
+        let pendingUpdates = [];
+        let lastChartUpdate = 0;
+        let animationFrameId = null;
+        
+        // Statistics
+        let sensor1Stats = { min: Infinity, max: -Infinity, sum: 0, count: 0 };
+        let sensor2Stats = { min: Infinity, max: -Infinity, sum: 0, count: 0 };
+        
+        // Cached DOM elements for performance
+        const domCache = {};
+        function getEl(id) {
+            if (!domCache[id]) domCache[id] = document.getElementById(id);
+            return domCache[id];
+        }
+        
+        // Chart setup
+        const ctx = document.getElementById('tempChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'Sensor 1',
+                        data: sensor1Data,
+                        borderColor: '#00d4ff',
+                        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Sensor 2',
+                        data: sensor2Data,
+                        borderColor: '#ff6b6b',
+                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: 'rgba(255,255,255,0.7)',
+                            font: { size: 12 }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${context.parsed.y.toFixed(2)} °C`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'second',
+                            displayFormats: {
+                                second: 'HH:mm:ss'
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(255,255,255,0.05)'
+                        },
+                        ticks: {
+                            color: 'rgba(255,255,255,0.5)',
+                            maxTicksLimit: 10
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(255,255,255,0.05)'
+                        },
+                        ticks: {
+                            color: 'rgba(255,255,255,0.5)',
+                            callback: function(value) {
+                                return value + ' °C';
+                            }
+                        }
+                    }
+                },
+                animation: {
+                    duration: 0
+                }
+            }
+        });
+        
+        // WebSocket connection
+        let ws = null;
+        let reconnectTimeout = null;
+        
+        function connect() {
+            ws = new WebSocket(WS_URL);
+            
+            ws.onopen = function() {
+                getEl('statusDot').classList.add('connected');
+                getEl('statusText').textContent = 'Connected';
+                getEl('errorMessage').style.display = 'none';
+            };
+            
+            ws.onclose = function() {
+                getEl('statusDot').classList.remove('connected');
+                getEl('statusText').textContent = 'Disconnected - Reconnecting...';
+                reconnectTimeout = setTimeout(connect, 2000);
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                handleData(data);
+            };
+        }
+        
+        function handleData(data) {
+            if (data.type === 'error') {
+                const errorEl = getEl('errorMessage');
+                errorEl.textContent = data.message;
+                errorEl.style.display = 'block';
+                return;
+            }
+            
+            if (data.type === 'temperature') {
+                // Buffer the update for smooth rendering
+                pendingUpdates.push(data);
+                scheduleRender();
+            }
+        }
+        
+        function scheduleRender() {
+            if (!animationFrameId) {
+                animationFrameId = requestAnimationFrame(processUpdates);
+            }
+        }
+        
+        function processUpdates(currentTime) {
+            animationFrameId = null;
+            
+            if (pendingUpdates.length === 0) return;
+            
+            // Process all buffered updates
+            const updates = pendingUpdates.splice(0);
+            let latestTimestamp = null;
+            
+            updates.forEach(data => {
+                const timestamp = new Date(data.timestamp);
+                latestTimestamp = timestamp;
+                
+                data.sensors.forEach(sensor => {
+                    const sensorNum = sensor.sensor;
+                    const temp = sensor.thermocouple_c;
+                    const tempF = sensor.thermocouple_f;
+                    const cj = sensor.cold_junction_c;
+                    
+                    // Update display with subtle animation
+                    const tempEl = getEl(`sensor${sensorNum}-temp`);
+                    tempEl.textContent = temp.toFixed(2);
+                    tempEl.classList.add('updated');
+                    setTimeout(() => tempEl.classList.remove('updated'), 150);
+                    
+                    getEl(`sensor${sensorNum}-temp-f`).textContent = `${tempF.toFixed(2)} °F`;
+                    getEl(`sensor${sensorNum}-cj`).textContent = `${cj.toFixed(2)} °C`;
+                    
+                    // Update chart data
+                    const dataPoint = { x: timestamp, y: temp };
+                    if (sensorNum === 1) {
+                        sensor1Data.push(dataPoint);
+                        updateStats(sensor1Stats, temp, 1);
+                        if (sensor1Data.length > MAX_DATA_POINTS) sensor1Data.shift();
+                    } else if (sensorNum === 2) {
+                        sensor2Data.push(dataPoint);
+                        updateStats(sensor2Stats, temp, 2);
+                        if (sensor2Data.length > MAX_DATA_POINTS) sensor2Data.shift();
+                    }
+                });
+            });
+            
+            // Update timestamp (chart updates handled by smoothScroll)
+            if (latestTimestamp) {
+                getEl('lastUpdate').textContent = latestTimestamp.toLocaleTimeString();
+            }
+        }
+        
+        function updateStats(stats, value, sensorNum) {
+            const wasMin = value < stats.min;
+            const wasMax = value > stats.max;
+            
+            stats.min = Math.min(stats.min, value);
+            stats.max = Math.max(stats.max, value);
+            stats.sum += value;
+            stats.count++;
+            
+            const prefix = `sensor${sensorNum}`;
+            const minEl = getEl(`${prefix}-min`);
+            const maxEl = getEl(`${prefix}-max`);
+            const avgEl = getEl(`${prefix}-avg`);
+            
+            minEl.textContent = stats.min.toFixed(1) + '°';
+            maxEl.textContent = stats.max.toFixed(1) + '°';
+            avgEl.textContent = (stats.sum / stats.count).toFixed(1) + '°';
+            
+            // Brief highlight on new min/max
+            if (wasMin) {
+                minEl.style.color = '#00d4ff';
+                setTimeout(() => minEl.style.color = '', 300);
+            }
+            if (wasMax) {
+                maxEl.style.color = '#ff6b6b';
+                setTimeout(() => maxEl.style.color = '', 300);
+            }
+        }
+        
+        function setTimeRange(seconds) {
+            timeRange = seconds;
+            document.querySelectorAll('.chart-controls button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            const btnId = seconds === 30 ? 'btn-30s' : seconds === 60 ? 'btn-1m' : 'btn-5m';
+            getEl(btnId).classList.add('active');
+            updateChartTimeRange();
+            chart.update('none');
+        }
+        
+        function updateChartTimeRange() {
+            const now = new Date();
+            const minTime = new Date(now.getTime() - timeRange * 1000);
+            chart.options.scales.x.min = minTime;
+            chart.options.scales.x.max = now;
+        }
+        
+        function clearData() {
+            sensor1Data.length = 0;
+            sensor2Data.length = 0;
+            sensor1Stats = { min: Infinity, max: -Infinity, sum: 0, count: 0 };
+            sensor2Stats = { min: Infinity, max: -Infinity, sum: 0, count: 0 };
+            pendingUpdates.length = 0;
+            
+            ['sensor1', 'sensor2'].forEach(prefix => {
+                getEl(`${prefix}-min`).textContent = '--';
+                getEl(`${prefix}-max`).textContent = '--';
+                getEl(`${prefix}-avg`).textContent = '--';
+            });
+            
+            chart.update('none');
+        }
+        
+        // Smooth chart scrolling animation (updates time axis continuously)
+        let lastScrollUpdate = 0;
+        function smoothScroll(currentTime) {
+            // Update chart time range every 50ms for smooth scrolling
+            if (currentTime - lastScrollUpdate >= 50) {
+                lastScrollUpdate = currentTime;
+                updateChartTimeRange();
+                chart.update('none');
+            }
+            requestAnimationFrame(smoothScroll);
+        }
+        
+        // Start connection and smooth scrolling
+        connect();
+        requestAnimationFrame(smoothScroll);
+    </script>
+</body>
+</html>

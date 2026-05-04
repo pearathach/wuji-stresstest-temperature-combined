@@ -1,0 +1,170 @@
+import serial
+import json
+import time
+from flask import Flask, jsonify
+
+PORT = "/dev/ttyACM0"
+BAUD = 115200
+NUM_SENSORS = 3
+
+ser = serial.Serial(PORT, BAUD, timeout=1)
+time.sleep(2)
+
+app = Flask(__name__)
+
+latest_data = {
+    "time": 0,
+    "temps_f": [None] * NUM_SENSORS
+}
+
+start_time = time.time()
+
+@app.route("/data")
+def data():
+    return jsonify(latest_data)
+
+def serial_reader():
+    global latest_data
+    while True:
+        line = ser.readline().decode().strip()
+        if not line:
+            continue
+        try:
+            msg = json.loads(line)
+            temps_c = msg["temps"]
+
+            temps_f = [
+                (t * 9/5 + 32) if t is not None else None
+                for t in temps_c
+            ]
+
+            latest_data = {
+                "time": round(time.time() - start_time, 2),
+                "temps_f": temps_f
+            }
+
+        except Exception:
+            pass
+
+if __name__ == "__main__":
+    import threading
+    threading.Thread(target=serial_reader, daemon=True).start()
+    app.run(host="0.0.0.0", port=5000)[3:25 PM]<!DOCTYPE html>
+<html>
+<head>
+  <title>Live Thermocouple Plot</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<h2>Live Thermocouple Temperatures (°F)</h2>
+<canvas id="tempChart" width="800" height="400"></canvas>
+
+<script>
+const NUM_SENSORS = 3;
+const MAX_POINTS = 100;
+
+const ctx = document.getElementById("tempChart").getContext("2d");
+
+const chart = new Chart(ctx, {
+  type: "line",
+  data: {
+    labels: [],
+    datasets: [...Array(NUM_SENSORS)].map((_, i) => ({
+      label: `TC ${i+1}`,
+      data: [],
+      borderWidth: 2,
+      tension: 0.2
+    }))
+  },
+  options: {
+    animation: false,
+    scales: {
+      x: { title: { display: true, text: "Time (s)" }},
+      y: { title: { display: true, text: "Temperature (°F)" }}
+    }
+  }
+});
+
+async function updateChart() {
+  const res = await fetch("/data");
+  const json = await res.json();
+
+  chart.data.labels.push(json.time);
+
+  json.temps_f.forEach((temp, i) => {
+    chart.data.datasets[i].data.push(temp);
+  });
+
+  if (chart.data.labels.length > MAX_POINTS) {
+    chart.data.labels.shift();
+    chart.data.datasets.forEach(ds => ds.data.shift());
+  }
+
+  chart.update();
+}
+
+setInterval(updateChart, 1000);
+</script>
+
+</body>
+</html>[3:26 PM]<!DOCTYPE html>
+<html>
+<head>
+  <title>Live Thermocouple Plot</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<h2>Live Thermocouple Temperatures (°F)</h2>
+<canvas id="tempChart" width="800" height="400"></canvas>
+
+<script>
+const NUM_SENSORS = 3;
+const MAX_POINTS = 100;
+
+const ctx = document.getElementById("tempChart").getContext("2d");
+
+const chart = new Chart(ctx, {
+  type: "line",
+  data: {
+    labels: [],
+    datasets: [...Array(NUM_SENSORS)].map((_, i) => ({
+      label: `TC ${i+1}`,
+      data: [],
+      borderWidth: 2,
+      tension: 0.2
+    }))
+  },
+  options: {
+    animation: false,
+    scales: {
+      x: { title: { display: true, text: "Time (s)" }},
+      y: { title: { display: true, text: "Temperature (°F)" }}
+    }
+  }
+});
+
+async function updateChart() {
+  const res = await fetch("/data");
+  const json = await res.json();
+
+  chart.data.labels.push(json.time);
+
+  json.temps_f.forEach((temp, i) => {
+    chart.data.datasets[i].data.push(temp);
+  });
+
+  if (chart.data.labels.length > MAX_POINTS) {
+    chart.data.labels.shift();
+    chart.data.datasets.forEach(ds => ds.data.shift());
+  }
+
+  chart.update();
+}
+
+setInterval(updateChart, 1000);
+</script>
+
+</body>
+</html>
